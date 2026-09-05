@@ -1,0 +1,9 @@
+name = "nextchair-regional"
+main = "src/index.js"
+compatibility_date = "2026-09-04"
+
+[vars]
+NOTIFICATION_EMAIL = "hello@businessdatagurus.com"
+
+# Set RESEND_API_KEY as a Cloudflare Worker secret before deploying:
+# npx wrangler secret put RESEND_API_KEY
