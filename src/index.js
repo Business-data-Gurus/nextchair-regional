@@ -54,22 +54,144 @@ function page(region) {
 
 async function handleLead(request, env) {
   let data;
-  try { data = await request.json(); } catch { return Response.json({ error: 'Invalid request.' }, { status: 400 }); }
+  try {
+    data = await request.json();
+  } catch {
+    return Response.json({ error: 'Invalid request.' }, { status: 400 });
+  }
+
   const name = String(data.name || '').trim();
   const email = String(data.email || '').trim();
   const business = String(data.business || '').trim();
   const phone = String(data.phone || '').trim();
   const message = String(data.message || '').trim();
-  if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return Response.json({ error: 'Please provide your name and a valid email address.' }, { status: 400 });
-  const region = request.headers.get('Referer')?.includes('/next-chair-va') ? 'Virginia' : 'Maryland';
-  if (!env.RESEND_API_KEY) return Response.json({ error: 'Email notifications are not configured yet.' }, { status: 503 });
-  const text = `New Next Chair ${region} lead\n\nName: ${name}\nEmail: ${email}\nBusiness: ${business || 'Not provided'}\nPhone: ${phone || 'Not provided'}\nMessage: ${message || 'Not provided'}`;
+
+  if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return Response.json(
+      { error: 'Please provide your name and a valid email address.' },
+      { status: 400 }
+    );
+  }
+
+  const region = request.headers.get('Referer')?.includes('/next-chair-va')
+    ? 'Virginia'
+    : 'Maryland';
+
+  if (!env.RESEND_API_KEY) {
+    return Response.json(
+      { error: 'Email notifications are not configured yet.' },
+      { status: 503 }
+    );
+  }
+
+  const escapeHtml = (value) =>
+    String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  const safeBusiness = escapeHtml(business || 'Not provided');
+  const safePhone = escapeHtml(phone || 'Not provided');
+  const safeMessage = escapeHtml(message || 'Not provided').replace(/\n/g, '<br>');
+  const notificationEmail = env.NOTIFICATION_EMAIL || 'hello@businessdatagurus.com';
+
+  const text = `New Next Chair ${region} lead
+
+Name: ${name}
+Email: ${email}
+Business: ${business || 'Not provided'}
+Phone: ${phone || 'Not provided'}
+Message: ${message || 'Not provided'}`;
+
+  const html = `<!doctype html>
+<html lang="en">
+  <body style="margin:0;padding:0;background:#f3f7fa;font-family:Arial,Helvetica,sans-serif;color:#13202a;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3f7fa;">
+      <tr>
+        <td align="center" style="padding:24px 12px;">
+          <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;">
+            <tr>
+              <td style="padding:24px 28px;background:#0c3557;color:#ffffff;">
+                <div style="font-size:21px;line-height:1.2;font-weight:800;">Next Chair</div>
+                <div style="padding-top:5px;font-size:13px;line-height:1.4;color:#b9e1ff;">New ${escapeHtml(region)} launch-offer lead</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;">
+                <h1 style="margin:0 0 18px;font-size:22px;line-height:1.3;color:#13202a;">A new lead has arrived</h1>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
+                  <tr>
+                    <td style="width:130px;padding:11px 0;border-bottom:1px solid #dce9f3;font-size:13px;font-weight:700;color:#5b6871;">Name</td>
+                    <td style="padding:11px 0;border-bottom:1px solid #dce9f3;font-size:14px;color:#13202a;">${safeName}</td>
+                  </tr>
+                  <tr>
+                    <td style="width:130px;padding:11px 0;border-bottom:1px solid #dce9f3;font-size:13px;font-weight:700;color:#5b6871;">Email</td>
+                    <td style="padding:11px 0;border-bottom:1px solid #dce9f3;font-size:14px;"><a href="mailto:${safeEmail}" style="color:#1867b0;text-decoration:none;">${safeEmail}</a></td>
+                  </tr>
+                  <tr>
+                    <td style="width:130px;padding:11px 0;border-bottom:1px solid #dce9f3;font-size:13px;font-weight:700;color:#5b6871;">Business</td>
+                    <td style="padding:11px 0;border-bottom:1px solid #dce9f3;font-size:14px;color:#13202a;">${safeBusiness}</td>
+                  </tr>
+                  <tr>
+                    <td style="width:130px;padding:11px 0;border-bottom:1px solid #dce9f3;font-size:13px;font-weight:700;color:#5b6871;">Phone</td>
+                    <td style="padding:11px 0;border-bottom:1px solid #dce9f3;font-size:14px;color:#13202a;">${safePhone}</td>
+                  </tr>
+                  <tr>
+                    <td style="width:130px;padding:11px 0;font-size:13px;font-weight:700;color:#5b6871;vertical-align:top;">Need</td>
+                    <td style="padding:11px 0;font-size:14px;line-height:1.55;color:#13202a;">${safeMessage}</td>
+                  </tr>
+                </table>
+                <div style="padding-top:24px;">
+                  <a href="mailto:${safeEmail}?subject=${encodeURIComponent('Re: Your Next Chair launch offer')}" style="display:inline-block;padding:12px 18px;background:#f2b441;border-radius:7px;color:#13202a;font-size:14px;font-weight:700;text-decoration:none;">Reply to ${safeName}</a>
+                </div>
+                <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#5b6871;">This lead was submitted through the Next Chair ${escapeHtml(region)} landing page.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="height:5px;background:#f2b441;font-size:1px;line-height:1px;">&nbsp;</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
   const resend = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: 'Next Chair Leads <onboarding@resend.dev>', to: [env.NOTIFICATION_EMAIL || 'hello@businessdatagurus.com'], reply_to: email, subject: `New Next Chair ${region} lead: ${name}`, text })
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: 'Next Chair Leads <ops@businessdatagurus.com>',
+      to: [notificationEmail],
+      reply_to: email,
+      subject: `New Next Chair ${region} lead: ${name}`,
+      html,
+      text
+    })
   });
-  if (!resend.ok) return Response.json({ error: 'We could not send your request right now. Please call (202) 423-1445.' }, { status: 502 });
+
+  const resendBody = await resend.text();
+
+  if (!resend.ok) {
+    console.error('Resend lead-email failure:', {
+      status: resend.status,
+      body: resendBody
+    });
+
+    return Response.json(
+      { error: 'We could not send your request right now. Please call (202) 423-1445.' },
+      { status: 502 }
+    );
+  }
+
+  console.log('Resend lead email accepted:', resendBody);
   return Response.json({ ok: true });
 }
 
